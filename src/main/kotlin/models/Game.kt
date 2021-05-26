@@ -22,6 +22,12 @@ class Game {
     @SerialName("Picked")
     var hasBeenPicked: Boolean = false
 
+    @SerialName("Raffle Text")
+    var text: String = ""
+
+    @SerialName("SteamId")
+    var steamId: Int = 0
+
     val keys: List<String>
         get() = keysRaw.split('\n')
 

@@ -1,3 +1,4 @@
+import dev.kord.common.entity.Snowflake
 import dev.kord.core.Kord
 import dev.kord.core.entity.ReactionEmoji
 import dev.kord.core.event.channel.VoiceChannelUpdateEvent
@@ -6,6 +7,7 @@ import dev.kord.core.event.user.UserUpdateEvent
 import dev.kord.core.event.user.VoiceStateUpdateEvent
 import dev.kord.core.on
 import kotlinx.coroutines.delay
+import services.DiscService
 
 suspend fun main() {
 

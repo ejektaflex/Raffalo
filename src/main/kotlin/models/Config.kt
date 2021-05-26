@@ -15,4 +15,8 @@ class Config {
     @SerialName("bot_token")
     var discordBotToken: String = "UNKNOWN_TOKEN"
 
+    var channel: Long = 0L
+
+    var guild: Long = 0L
+
 }

@@ -31,6 +31,46 @@ object Raffalo {
         }
     }
 
+    suspend fun startNewRaffle(secs: Int) {
+
+        println("!!!")
+
+        val pickedGame = pickableGames.randomOrNull()
+
+        if (pickedGame == null) {
+            println("???")
+            DiscService.sendMessage("No raffle-able items exist!")
+            println("oh no")
+            return
+        }
+
+        var msg = "Hello! Welcome to today's raffle! It will last for: $secs seconds."
+
+        if (pickedGame.isMystery) {
+            msg += "\nThis raffle is a mystery!"
+
+            // Show a hint, if one exists
+            if (pickedGame.text.trim() != "") {
+                msg += " The raffle hint is:"
+                msg += "\n`${pickedGame.text}`"
+            }
+
+        } else {
+            msg += "\nThis week's raffle is a known game! The game is named: `${pickedGame.name}`"
+        }
+
+        msg += "\n\nThe more you interact with our server, the better your odds!"
+
+        DiscService.sendMessage(msg)
+
+        if (!pickedGame.isMystery) {
+            DiscService.sendSteamImage(pickedGame.steamId)
+        }
+
+
+
+    }
+
     suspend fun start() {
         update()
         DiscService.start()
