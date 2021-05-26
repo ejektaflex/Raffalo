@@ -9,6 +9,10 @@ import kotlinx.coroutines.delay
 
 suspend fun main() {
 
+    Raffalo.start()
+
+    return
+
     val client = Kord("")
     val pingPong = ReactionEmoji.Unicode("\uD83C\uDFD3")
 
