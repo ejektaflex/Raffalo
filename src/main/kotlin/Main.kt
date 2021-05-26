@@ -11,35 +11,9 @@ suspend fun main() {
 
     Raffalo.start()
 
+    println(Raffalo.games.map { it.name })
+
     return
-
-    val client = Kord("")
-    val pingPong = ReactionEmoji.Unicode("\uD83C\uDFD3")
-
-    client.on<MessageCreateEvent> {
-        if (message.content != "!ping") return@on
-
-        val response = message.channel.createMessage("Pong!")
-        response.addReaction(pingPong)
-
-        delay(1000)
-        message.delete()
-        response.delete()
-    }
-
-    client.on<VoiceStateUpdateEvent> {
-
-        if (old == null) {
-            println("We entered! $old")
-        } else if (state.data.channelId == null) {
-            println("We left? $state")
-        }
-
-        println(this.old)
-        println(this.state)
-    }
-
-    client.login()
 
 
 
