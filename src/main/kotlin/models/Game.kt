@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 class Game {
     var id: String = "UNKNOWN_ID"
 
-    @SerialName("Submitters")
-    var submitterIds: List<String> = listOf()
+    @SerialName("Discord Ids")
+    var submitterIds: List<Long> = listOf()
 
     @SerialName("Game Name")
     var name: String = "UNKNOWN_NAME"
@@ -30,5 +30,9 @@ class Game {
 
     val keys: List<String>
         get() = keysRaw.split('\n')
+
+    override fun toString(): String {
+        return "$id, $name, picked=$hasBeenPicked"
+    }
 
 }

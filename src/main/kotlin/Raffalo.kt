@@ -1,12 +1,18 @@
+import dev.kord.common.entity.Snowflake
+import dev.kord.core.behavior.channel.MessageChannelBehavior
 import dev.kord.core.entity.Member
 import dev.kord.core.entity.User
+import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import models.Config
 import models.Game
 import models.Participant
+import models.StateData
 import services.AirService
 import services.DiscService
 import java.io.File
+import kotlin.math.max
+import kotlin.system.exitProcess
 
 object Raffalo {
 
@@ -16,6 +22,8 @@ object Raffalo {
 
     val pickableGames: List<Game>
         get() = games.filter { !it.hasBeenPicked }
+
+    var pickedGame: Game? = null
 
     val config = Json.decodeFromString(Config.serializer(), File("config.json").readText())
 
@@ -31,11 +39,13 @@ object Raffalo {
         }
     }
 
-    suspend fun startNewRaffle(secs: Int) {
+    suspend fun getParticipant(snowflake: Snowflake): Participant {
+        return getParticipant(DiscService.client.getUser(snowflake)!!)
+    }
 
-        println("!!!")
+    suspend fun startNewRaffle(days: Int, msgChannel: MessageChannelBehavior) {
 
-        val pickedGame = pickableGames.randomOrNull()
+        pickedGame = pickableGames.firstOrNull()
 
         if (pickedGame == null) {
             println("???")
@@ -44,40 +54,157 @@ object Raffalo {
             return
         }
 
-        var msg = "Hello! Welcome to today's raffle! It will last for: $secs seconds."
+        pickedGame?.let {
 
-        if (pickedGame.isMystery) {
-            msg += "\nThis raffle is a mystery!"
+            println("Picked: $pickedGame")
 
-            // Show a hint, if one exists
-            if (pickedGame.text.trim() != "") {
-                msg += " The raffle hint is:"
-                msg += "\n`${pickedGame.text}`"
+            var msg = "Hello! Welcome to today's raffle! It will last for: $days days."
+
+            if (it.isMystery) {
+                msg += "\nThis raffle is a mystery!"
+
+                // Show a hint, if one exists
+                if (it.text.trim() != "") {
+                    msg += " The raffle hint is:"
+                    msg += "\n\n`${it.text}`"
+                }
+
+            } else {
+                msg += "\nThis week's raffle is a known game! The game is named: \n\n`${it.name}`"
+                msg += "\n\nhttps://store.steampowered.com/app/${it.steamId}/"
             }
 
-        } else {
-            msg += "\nThis week's raffle is a known game! The game is named: `${pickedGame.name}`"
+            msg += "\n\nThe more you interact with our server, the better your odds!"
+
+            val sent = msgChannel.createMessage(msg)
+            DiscService.replacePinWith(sent)
         }
-
-        msg += "\n\nThe more you interact with our server, the better your odds!"
-
-        DiscService.sendMessage(msg)
-
-        if (!pickedGame.isMystery) {
-            DiscService.sendSteamImage(pickedGame.steamId)
-        }
-
-
 
     }
 
+    suspend fun cancelRaffle(msgChannel: MessageChannelBehavior) {
+        StateData.reset()
+        msgChannel.createMessage("This raffle has been cancelled!")
+    }
+
+    suspend fun endRaffle(msgChannel: MessageChannelBehavior) {
+
+        StateData.save(File(System.currentTimeMillis().toString() + ".bak.json").apply {
+            createNewFile()
+        })
+
+        val game = pickedGame
+
+        if (game == null) {
+            msgChannel.createMessage("There is no raffle to end!")
+            return
+        }
+
+        //msgChannel.createMessage("Hello to <@&${config.roleToPing}>!")
+        delay(500)
+        var msg = "The raffle has ended! "
+        msg += "\nThe possible winners are: ${finalParticipants().joinToString(", ") { it.nickname }}"
+        msg += "\nThe winner has been chosen, and it turns out to be:"
+        val winner = calcWinner()
+
+        if (winner == null) {
+            msgChannel.createMessage("Actually, there are no winners today. Please come back next time. :(")
+            return
+        }
+
+        msg += "\n\n`${winner.nickname}`!"
+        msg += "\n\nCongrats! "
+
+        msgChannel.createMessage(msg)
+
+        val shouldSendDM = false // game.keys.isEmpty() or game.keys.all { it.isEmpty() }
+
+        println("Should send: ${game.keys.isEmpty() or game.keys.all { it.isEmpty() }}, keys: '${game.keys}'")
+
+        if (game.isMystery) {
+            msg += "You won this game:\n\n\nhttps://store.steampowered.com/app/${game.steamId}/"
+            msg += if (shouldSendDM) {
+                "\n\nAsk ${game.submitterIds.joinToString(" or ") { "<@$it>" }} for your prize!"
+            } else {
+                "\n\nThe prize will be sent to you via a DM!"
+            }
+        }
+
+        if (shouldSendDM) { // do not deliver key yet
+            val winnerMember = DiscService.guildMembers.find { it.id.value == winner.id }
+            if (winnerMember == null) {
+                msgChannel.createMessage("I couldn't find the winner's user account to send them the prize... Awkward. Please message my owner :'(")
+            } else {
+                winnerMember.getDmChannelOrNull()?.let {
+                    it.createMessage("Here's what you've won!")
+                    it.createMessage(
+                        game.keysRaw.map { key -> "https://www.humblebundle.com/gift?key=$key" }.joinToString("\n")
+                    )
+                }
+            }
+        }
+
+        StateData.reset()
+        StateData.reload()
+
+    }
+
+    suspend fun finalParticipants(): List<Participant> {
+        println("PICKED GAME: $pickedGame")
+        println("SUBMITTER IDS: ${pickedGame?.submitterIds}")
+        return participants.filter {
+            it.key != DiscService.client.selfId.value
+        }.filter {
+            val submitterIds = pickedGame?.submitterIds ?: return@filter true
+            println("${it.value.nickname} - ${it.key} - $submitterIds - ${it.key in submitterIds}")
+            it.key !in submitterIds
+        }.filter {
+            !DiscService.homeGuild.getMember(Snowflake(it.key)).isBot
+        }.filter {
+            it.value.numVoiceSecs != 0L || it.value.numMessages != 0L || it.value.numReactions != 0L
+        }.values.toList()
+    }
+
+    suspend fun genWeightMap(): Map<Participant, Double>? {
+        val peeps = finalParticipants()
+        //val peeps = participants.values
+
+        println("Peeps:")
+        println(peeps.map { it.nickname })
+
+        if (peeps.isEmpty()) {
+            return null
+        }
+
+        val totReactions = max(1.0, peeps.maxOf { it.numReactions }.toDouble())
+        val totVoiceSecs = max(1.0, peeps.maxOf { it.numVoiceSecs }.toDouble())
+        val totMessages = max(1.0, peeps.maxOf { it.numMessages }.toDouble())
+
+        // ((A+B+C)/2+1) * (1+(BOOST*0.2))
+        return peeps.associateWith {
+            (((it.numMessages / totMessages) + (it.numVoiceSecs / totVoiceSecs) + (it.numReactions / totReactions)) / 2 + 1) * (1 + (it.numBoosts * 0.2))
+        }
+    }
+
+    private suspend fun calcWinner(): Participant? {
+        return genWeightMap()?.weightedRandom()
+    }
+
+
     suspend fun start() {
-        update()
+        load()
         DiscService.start()
     }
 
-    private suspend fun update() {
+    fun stop() {
+        StateData.save()
+        exitProcess(0)
+    }
+
+    private suspend fun load() {
+        StateData.load()
         games = AirService.fetchGames()
+        println("Games: ${games.joinToString(", ") { it.name }}")
     }
 
 }

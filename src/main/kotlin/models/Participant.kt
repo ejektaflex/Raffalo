@@ -9,6 +9,8 @@ data class Participant(
     var lastVoiceEnter: Long = 0,
     var numReactions: Long = 0,
     var numVoiceSecs: Long = 0,
-    var numMessages: Long = 0
+    var numMessages: Long = 0,
+    var numTickets: Int = 0,
+    var numBoosts: Int = 0
 ) {
 }
