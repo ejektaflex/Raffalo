@@ -22,8 +22,19 @@ dependencies {
     implementation("dev.kord:kord-core:0.7.0-RC3")
     implementation("io.ktor:ktor-client-core:1.5.4")
     implementation("io.ktor:ktor-client-cio:1.5.4")
+    implementation("io.github.microutils:kotlin-logging-jvm:2.0.6")
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions.jvmTarget = JavaVersion.VERSION_1_8.toString()
+}
+
+tasks.withType<Jar>() {
+    manifest {
+        attributes["Main-Class"] = "doot.MainKt"
+    }
+    from("config.json")
+    configurations["compileClasspath"].forEach { file: File ->
+        from(zipTree(file.absoluteFile))
+    }
 }

@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import models.Participant
+import models.StateData
 import reply
 
 object DiscService {
@@ -73,11 +74,36 @@ object DiscService {
         msg.pin()
     }
 
+    private suspend fun forceFauxExitVoiceStates() {
+        guildChannels.filterIsInstance<VoiceChannel>().forEach {
+            val chatParts = it.voiceStates.map { vs -> vs.getMember().asParticipant() }.toList()
+            chatParts.forEach { participant ->
+                handleVoiceChatExit(participant)
+            }
+        }
+    }
+
+    private suspend fun forceFauxEnterVoiceStates() {
+        guildChannels.filterIsInstance<VoiceChannel>().forEach {
+            val chatParts = it.voiceStates.map { vs -> vs.getMember().asParticipant() }.toList()
+            chatParts.forEach { participant ->
+                handleVoiceChatEnter(participant)
+            }
+        }
+    }
+
+    suspend fun forceCountVoiceStates() {
+        forceFauxExitVoiceStates()
+        forceFauxEnterVoiceStates()
+    }
+
     private fun handleVoiceChatEnter(participant: Participant) {
+        println("VS: Entering ${participant.nickname}")
         participant.lastVoiceEnter = System.currentTimeMillis() / 1000
     }
 
     private fun handleVoiceChatExit(participant: Participant) {
+        println("VS: Exiting ${participant.nickname}")
         participant.apply {
             lastVoiceEnter.let {
                 numVoiceSecs += (System.currentTimeMillis() / 1000) - it
@@ -100,7 +126,6 @@ object DiscService {
 
         client.on<ReadyEvent> {
             guildChannels.filterIsInstance<VoiceChannel>().forEach {
-                println("Name: ${it.name}, States: ${it.voiceStates.toList()}")
                 val chatParts = it.voiceStates.map { vs -> vs.getMember().asParticipant() }.toList()
                 chatParts.forEach { participant ->
                     handleVoiceChatEnter(participant)
@@ -241,6 +266,10 @@ object DiscService {
                                 Raffalo.endRaffle(message.channel)
                             }
 
+                            "!dump" -> {
+                                StateData.dump()
+                            }
+
                             "!bedug" -> {
                                 message.reply("ok sir")
                                 println(Raffalo.finalParticipants())
@@ -266,13 +295,7 @@ object DiscService {
                                 message.reply("Raffalo is shutting down!")
 
                                 // Manually "exit" everybody out of voice chat seconds-count wise
-                                guildChannels.filterIsInstance<VoiceChannel>().forEach {
-                                    println("Name: ${it.name}, States: ${it.voiceStates.toList()}")
-                                    val chatParts = it.voiceStates.map { vs -> vs.getMember().asParticipant() }.toList()
-                                    chatParts.forEach { participant ->
-                                        handleVoiceChatExit(participant)
-                                    }
-                                }
+                                forceFauxExitVoiceStates()
                                 Raffalo.stop()
                             }
 

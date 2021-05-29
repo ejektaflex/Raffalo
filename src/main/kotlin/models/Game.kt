@@ -29,7 +29,7 @@ class Game {
     var steamId: Int = 0
 
     val keys: List<String>
-        get() = keysRaw.split('\n')
+        get() = keysRaw.split('\n').map { it.trim() }.filter { it != "" }
 
     override fun toString(): String {
         return "$id, $name, picked=$hasBeenPicked"

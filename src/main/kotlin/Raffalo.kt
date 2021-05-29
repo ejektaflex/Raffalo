@@ -2,6 +2,7 @@ import dev.kord.common.entity.Snowflake
 import dev.kord.core.behavior.channel.MessageChannelBehavior
 import dev.kord.core.entity.Member
 import dev.kord.core.entity.User
+import dev.kord.core.entity.channel.DmChannel
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.Json
 import models.Config
@@ -56,6 +57,8 @@ object Raffalo {
 
         pickedGame?.let {
 
+            StateData.resetParticipants()
+
             println("Picked: $pickedGame")
 
             var msg = "Hello! Welcome to today's raffle! It will last for: $days days."
@@ -87,7 +90,18 @@ object Raffalo {
         msgChannel.createMessage("This raffle has been cancelled!")
     }
 
+    suspend fun sendGift(user: User, game: Game) {
+        user.getDmChannelOrNull()?.let {
+            it.createMessage("Here's what you've won, ${user.username}!")
+            it.createMessage(
+                game.keys.joinToString("\n") { key -> "<https://www.humblebundle.com/gift?key=$key>" }
+            )
+        }
+    }
+
     suspend fun endRaffle(msgChannel: MessageChannelBehavior) {
+
+        DiscService.forceCountVoiceStates() // count players currently in chat
 
         StateData.save(File(System.currentTimeMillis().toString() + ".bak.json").apply {
             createNewFile()
@@ -100,7 +114,7 @@ object Raffalo {
             return
         }
 
-        //msgChannel.createMessage("Hello to <@&${config.roleToPing}>!")
+        msgChannel.createMessage("Hello to <@&${config.roleToPing}>!")
         delay(500)
         var msg = "The raffle has ended! "
         msg += "\nThe possible winners are: ${finalParticipants().joinToString(", ") { it.nickname }}"
@@ -117,9 +131,9 @@ object Raffalo {
 
         msgChannel.createMessage(msg)
 
-        val shouldSendDM = false // game.keys.isEmpty() or game.keys.all { it.isEmpty() }
+        val shouldSendDM = game.keys.isNotEmpty()
 
-        println("Should send: ${game.keys.isEmpty() or game.keys.all { it.isEmpty() }}, keys: '${game.keys}'")
+        println("Should send: ${game.keys.isNotEmpty()}, keys: '${game.keys}'")
 
         if (game.isMystery) {
             msg += "You won this game:\n\n\nhttps://store.steampowered.com/app/${game.steamId}/"
@@ -130,17 +144,14 @@ object Raffalo {
             }
         }
 
-        if (shouldSendDM) { // do not deliver key yet
+        if (shouldSendDM) {
             val winnerMember = DiscService.guildMembers.find { it.id.value == winner.id }
             if (winnerMember == null) {
                 msgChannel.createMessage("I couldn't find the winner's user account to send them the prize... Awkward. Please message my owner :'(")
             } else {
-                winnerMember.getDmChannelOrNull()?.let {
-                    it.createMessage("Here's what you've won!")
-                    it.createMessage(
-                        game.keysRaw.map { key -> "https://www.humblebundle.com/gift?key=$key" }.joinToString("\n")
-                    )
-                }
+                listOf(
+                    DiscService.owner, winnerMember // both owner and winner for now
+                ).forEach { user -> sendGift(user, game) }
             }
         }
 
@@ -150,6 +161,9 @@ object Raffalo {
     }
 
     suspend fun finalParticipants(): List<Participant> {
+
+        DiscService.forceCountVoiceStates() // :vomit:
+
         println("PICKED GAME: $pickedGame")
         println("SUBMITTER IDS: ${pickedGame?.submitterIds}")
         return participants.filter {

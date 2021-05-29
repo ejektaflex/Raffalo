@@ -26,7 +26,7 @@ data class StateData(
             resetGame()
         }
 
-        private fun resetParticipants() {
+        fun resetParticipants() {
             Raffalo.participants.values.forEach { participant ->
                 participant.apply {
                     numBoosts = 0
@@ -50,6 +50,12 @@ data class StateData(
             }
             Raffalo.participants = data.participants.associateBy { it.id }.toMutableMap()
             Raffalo.pickedGame = data.pickedGame
+        }
+
+        fun dump() {
+            val data = StateData(Raffalo.participants.values.toList(), Raffalo.pickedGame)
+            val str = JsonService.form.encodeToString(serializer(), data)
+            println(str)
         }
 
         fun reload() {
